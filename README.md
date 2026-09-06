@@ -10,15 +10,17 @@ Free **Chromium + Firefox/Zen** MV3 extension — on-page Claude.ai **context %*
 
 1. Open `chrome://extensions`
 2. Enable **Developer mode**
-3. **Load unpacked** → select this folder (`claude-meter`)
+3. **Load unpacked** → select this repo folder (`claude-meter`) — uses root `manifest.json`
 4. Open [claude.ai](https://claude.ai) and chat — overlay mounts bottom-right
 
 ### Firefox / Zen Browser
 
+Firefox `about:debugging` **Load Temporary Add-on** always loads **`manifest.json` in the folder you pick**, not a differently named file. Do **not** select the repo root (that loads Chromium `service_worker` and fails).
+
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click **This Firefox** (left sidebar)
 3. Click **Load Temporary Add-on…**
-4. Navigate to the `claude-meter` folder and select **`manifest.firefox.json`**
+4. Open the **`firefox/`** folder and select **`firefox/manifest.json`** (or any file inside `firefox/`)
 5. Open [claude.ai](https://claude.ai) and chat — overlay mounts bottom-right
 
 **Note:** Temporary add-ons unload when you close Zen/Firefox. Persistent install needs Mozilla signing (AMO) later.
@@ -32,61 +34,19 @@ Open `preview/mock.html` after serving the folder (or inject CSS via `__SHIPHOOK
 ```
 claude.ai page
 ├── MAIN world: src/page/fetch-hook.js
-│     wraps window.fetch · tees SSE · postMessage(source: shiphook-claude-meter)
-├── ISOLATED: src/content/content.js
-│     injects hook · polls /api/organizations/{org}/usage (via page)
-│     trunk-walks conversation JSON · merges MeterState
-│     prefs: chrome.storage.local enabled / showCache
-│     calls window.__SHIPHOOK_METER__.setState(state)
-├── ISOLATED: src/ui/overlay.js (+ overlay.css)  ← Redline
-│     Shadow DOM on #shiphook-claude-meter
+├── ISOLATED: src/content/content.js + src/ui/overlay.js
 └── background: src/background.js
-      service worker (Chromium `manifest.json`) / scripts event page (`manifest.firefox.json`)
-      storage helpers only · no network
+      Chromium root manifest.json → service_worker
+      Zen/Firefox firefox/manifest.json → background.scripts
 ```
 
-**Cross-browser:** Two manifests, one codebase. Chromium loads `manifest.json` (`service_worker`). Zen/Firefox temporary load uses `manifest.firefox.json` (`background.scripts` + gecko id). Firefox provides `chrome.storage` / `chrome.runtime` compatibility — no separate polyfill vendored in 0.1.9.
-
-| Signal | Source |
-|--------|--------|
-| Context % + breakdown | Conversation tree trunk (`current_leaf_message_uuid` → `parent_message_uuid`); ~4 chars/token; model-aware limit 200k / 500k / 1M |
-| Session / weekly | `GET /api/organizations/{org}/usage` + SSE `message_limit` (versioned adapters in `src/lib/usage.js`) |
-| Org id | Cookie / storage `lastActiveOrg` (best-effort) |
-| Cache timer | Soft ~5 min heuristic; only shown when `showCache` (popup toggle) |
-
-**Critical:** extension-origin fetch does **not** get `sessionKey` cookies → MAIN-world fetch wrap required.
+**Packaging:** Root = Chromium. `firefox/` = self-contained Gecko pack (same `src/` copy) so temporary load finds a Gecko `manifest.json`.
 
 ## Privacy
 
 - Local only — no telemetry, no backend, no accounts
 - Only talks to `claude.ai` with your existing session
 - Never sends meter data off-device
-
-## Accuracy caveats
-
-- Token counts are **approximate** (~4 chars/token; o200k would be better)
-- `/usage` and `message_limit` field names are **undocumented / unstable** — adapters may need bumps
-- Free plan REST usage may be `null` until after a reply — UI fails soft (`waiting`)
-- Context denominator is **model-aware** (200k / 500k / 1M), not hardcoded to 200k alone
-
-## MeterState (contract)
-
-```
-updatedAt, model?,
-context{ tokensApprox, limit, percent },
-breakdown{ tool_call, web_search, other → { count, tokensApprox? } },
-session{ utilization, percent, resetsAt?, resetsInSec? },
-weekly{ … same },
-chip?{ sessionPercent, weeklyPercent, sessionResetsInSec?, weeklyResetsInSec? },
-cache?, status: ok|waiting|error, error?
-```
-
-## Popup prefs
-
-`chrome.storage.local`:
-
-- `enabled` (default `true`) — when false, overlay is not shown
-- `showCache` (default `false`) — when true, cache timer fields are passed to UI
 
 ## License
 
