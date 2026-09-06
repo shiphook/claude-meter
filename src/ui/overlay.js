@@ -145,7 +145,22 @@
     panel.tabIndex = 0;
 
     panel.innerHTML = `
-      <div class="chip" aria-hidden="true"><span class="chip-pct">—</span></div>
+      <div class="chip" aria-hidden="true">
+        <div class="chip-session">
+          <div class="chip-row">
+            <span class="chip-label">Session</span>
+            <span class="chip-pct" data-k="chip-session-pct">—</span>
+          </div>
+          <div class="chip-bar"><i data-k="chip-session-fill"></i></div>
+        </div>
+        <div class="chip-weekly">
+          <div class="chip-row">
+            <span class="chip-label">Weekly</span>
+            <span class="chip-pct" data-k="chip-weekly-pct">—</span>
+          </div>
+          <div class="chip-bar"><i data-k="chip-weekly-fill"></i></div>
+        </div>
+      </div>
       <div class="body">
         <div class="row">
           <span class="title">Context</span>
@@ -198,7 +213,10 @@
     const $ = (k) => panel.querySelector(`[data-k="${k}"]`);
     const refs = {
       panel,
-      chipPct: panel.querySelector(".chip-pct"),
+      chipSessionPct: $("chip-session-pct"),
+      chipSessionFill: $("chip-session-fill"),
+      chipWeeklyPct: $("chip-weekly-pct"),
+      chipWeeklyFill: $("chip-weekly-fill"),
       model: panel.querySelector(".model"),
       contextPct: $("context-pct"),
       contextDetail: $("context-detail"),
@@ -285,9 +303,21 @@
 
     const ctxPct = clampPct(s.context?.percent);
     refs.contextPct.textContent = fmtPct(ctxPct);
-    refs.chipPct.textContent = fmtPct(ctxPct);
     refs.contextFill.style.width = ctxPct == null ? "0%" : `${ctxPct}%`;
     refs.model.textContent = s.model ? s.model.replace(/^claude-/, "") : "";
+
+    // Collapsed chip: session + weekly mini-bars (prefer chip.* overrides from eng)
+    const chipSessionPct = clampPct(
+      s.chip?.sessionPercent != null ? s.chip.sessionPercent : s.session?.percent
+    );
+    const chipWeeklyPct = clampPct(
+      s.chip?.weeklyPercent != null ? s.chip.weeklyPercent : s.weekly?.percent
+    );
+    refs.chipSessionPct.textContent = fmtPct(chipSessionPct);
+    refs.chipSessionFill.style.width = chipSessionPct == null ? "0%" : `${chipSessionPct}%`;
+    refs.chipWeeklyPct.textContent = fmtPct(chipWeeklyPct);
+    refs.chipWeeklyFill.style.width = chipWeeklyPct == null ? "0%" : `${chipWeeklyPct}%`;
+
     // model-aware limit from eng — never hardcode 200k in UI
     if (refs.contextDetail) {
       const used = s.context?.tokensApprox;

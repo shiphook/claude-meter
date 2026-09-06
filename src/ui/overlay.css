@@ -34,10 +34,10 @@
 }
 
 .panel[data-collapsed="true"] {
-  width: auto;
-  min-width: 0;
-  padding: 6px 10px;
-  border-radius: 999px;
+  width: 138px;
+  min-width: 138px;
+  padding: 8px 10px;
+  border-radius: 12px;
   cursor: pointer;
 }
 
@@ -63,14 +63,50 @@
 
 .chip {
   display: none;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  width: 100%;
 }
 .panel[data-collapsed="true"] .chip { display: flex; }
 .panel[data-collapsed="true"] .body { display: none; }
+
+.chip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.chip-label {
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.chip-pct {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-left: auto;
+}
+.chip-bar {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+  margin-top: 2px;
+}
+.chip-bar > i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .chip-bar > i { transition: width 180ms ease; }
+}
 
 .pct {
   font-size: 22px;
