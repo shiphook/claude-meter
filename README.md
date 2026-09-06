@@ -26,12 +26,12 @@ Built by [Redline](https://github.com/shiphook) (UI) and Always-On (Engineering)
 ### Expanded View
 Shows full context breakdown with tool/web/other counts, approximate tokens, and usage percentages.
 
-![Expanded Meter](docs/screenshots/live-01-expanded.png)
+![Expanded Meter](docs/screenshots/live-01-expanded.jpg)
 
 ### Collapsed View
 Compact pill with session and weekly usage bars only.
 
-![Collapsed Meter](docs/screenshots/live-02-collapsed.png)
+![Collapsed Meter](docs/screenshots/live-02-collapsed.jpg)
 
 ---
 
