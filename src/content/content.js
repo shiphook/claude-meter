@@ -576,12 +576,36 @@ if (!host  ||  !host.shadowRoot) remountOverlayIfNeeded();
 });
 obs.observe(document.documentElement,{childList:true,subtree:true });
 }
+function extractConversationId(url){
+try{
+const m=String(url).match(/\/chat\/([0-9a-fA-F-]{36})/);
+return m ? m[1] :null;
+}catch (_){
+return null;
+}
+}
 function watchUrlChanges(){
 let lastUrl=location.href;
+let lastConversationId=extractConversationId(lastUrl);
 const checkUrl=()=>{
 const currentUrl=location.href;
 if (currentUrl  !== lastUrl){
 lastUrl=currentUrl;
+const currentConversationId=extractConversationId(currentUrl);
+if (currentConversationId  !== lastConversationId){
+lastConversationId=currentConversationId;
+setState({
+context:{tokensApprox:0,limit:meterState.context.limit  ||  200000,percent:0 },
+breakdown:{
+tool_call:{count:0,tokensApprox:0 },
+web_search:{count:0,tokensApprox:0 },
+other:{count:0,tokensApprox:0 },
+},
+});
+}
+if (currentConversationId){
+requestConversationTree(currentConversationId);
+}
 requestUsageFetch();
 }
 };
