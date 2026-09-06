@@ -5,7 +5,7 @@
  */
 
 /** Adapter registry — bump when spike finds new shapes. */
-export const USAGE_ADAPTER_VERSION = 1;
+export const USAGE_ADAPTER_VERSION = 2;
 
 /**
  * @param {any} payload
@@ -35,7 +35,19 @@ export function parseMessageLimit(payload) {
   }
   if (typeof root !== 'object') return null;
 
+  // 2026-08 live shape: message_limit.windows["5h"|"7d"]
+  const windows = root.windows || payload.windows || null;
+  const sessionFromWindows =
+    windows && typeof windows === 'object'
+      ? normalizeBucket(windows['5h'] || windows['5H'] || windows.session)
+      : null;
+  const weeklyFromWindows =
+    windows && typeof windows === 'object'
+      ? normalizeBucket(windows['7d'] || windows['7D'] || windows.weekly)
+      : null;
+
   const session =
+    sessionFromWindows ||
     normalizeBucket(
       pickFirst(root, [
         'session',
@@ -45,9 +57,11 @@ export function parseMessageLimit(payload) {
         'rate_limit_0',
         'short',
       ])
-    ) || undefined;
+    ) ||
+    undefined;
 
   const weekly =
+    weeklyFromWindows ||
     normalizeBucket(
       pickFirst(root, [
         'weekly',
@@ -58,7 +72,8 @@ export function parseMessageLimit(payload) {
         'long',
         'week',
       ])
-    ) || undefined;
+    ) ||
+    undefined;
 
   const single = normalizeBucket(root);
   if (!session && !weekly && single) {
@@ -81,8 +96,8 @@ export function parseMessageLimit(payload) {
  * Handles GET /api/organizations/{org}/usage and SSE message_limit.
  * @param {any} apiJson
  * @returns {{
- *   session: { utilization: number, percent: number, resetsAt?: string, resetsInSec?: number },
- *   weekly: { utilization: number, percent: number, resetsAt?: string, resetsInSec?: number },
+ *   session: { utilization: number, percent: number, resetsAt?: string|number, resetsInSec?: number },
+ *   weekly: { utilization: number, percent: number, resetsAt?: string|number, resetsInSec?: number },
  *   empty?: boolean
  * }}
  */
@@ -105,8 +120,14 @@ export function normalizeUsage(apiJson) {
     return result;
   }
 
+  const windows =
+    (apiJson.message_limit && apiJson.message_limit.windows) ||
+    apiJson.windows ||
+    null;
+
   const sessionSrc =
     (parsed && parsed.session) ||
+    (windows && (windows['5h'] || windows['5H'])) ||
     pickFirst(apiJson, [
       'five_hour',
       'fiveHour',
@@ -117,6 +138,7 @@ export function normalizeUsage(apiJson) {
 
   const weeklySrc =
     (parsed && parsed.weekly) ||
+    (windows && (windows['7d'] || windows['7D'])) ||
     pickFirst(apiJson, [
       'seven_day',
       'sevenDay',
@@ -147,8 +169,47 @@ export function normalizeUsage(apiJson) {
 }
 
 /**
+ * Parse resets_at: unix seconds (< 1e12) → ms epoch number; else keep ISO/string.
+ * Also derive resetsInSec from now when possible.
+ * @param {any} raw
+ * @returns {{ resetsAt?: string|number, resetsInSec?: number }}
+ */
+export function normalizeResetsAt(raw) {
+  const out = {};
+  if (raw == null || raw === '') return out;
+
+  let ms = null;
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    ms = raw < 1e12 ? raw * 1000 : raw;
+    out.resetsAt = ms;
+  } else {
+    const s = String(raw).trim();
+    if (!s) return out;
+    const asNum = Number(s);
+    if (!Number.isNaN(asNum) && Number.isFinite(asNum) && /^\d+(\.\d+)?$/.test(s)) {
+      ms = asNum < 1e12 ? asNum * 1000 : asNum;
+      out.resetsAt = ms;
+    } else {
+      const parsed = Date.parse(s);
+      if (!Number.isNaN(parsed)) {
+        ms = parsed;
+        out.resetsAt = s; // keep ISO string when provided as string
+      } else {
+        out.resetsAt = s;
+      }
+    }
+  }
+
+  if (ms != null) {
+    const sec = Math.max(0, Math.floor((ms - Date.now()) / 1000));
+    out.resetsInSec = sec;
+  }
+  return out;
+}
+
+/**
  * @param {any} bucket
- * @returns {{ utilization: number, percent: number, resetsAt?: string, resetsInSec?: number } | null}
+ * @returns {{ utilization: number, percent: number, resetsAt?: string|number, resetsInSec?: number } | null}
  */
 export function normalizeBucket(bucket) {
   if (!bucket || typeof bucket !== 'object') return null;
@@ -161,27 +222,32 @@ export function normalizeBucket(bucket) {
     bucket.pct != null ? Number(bucket.pct) / 100 : null
   );
 
-  const resetsAt = firstString(
+  const rawResets = firstPresent(
     bucket.resets_at,
     bucket.resetsAt,
     bucket.reset_at,
     bucket.resetAt,
     bucket.resets
   );
-  const resetsInSec = firstNumber(
+  const resetInfo = normalizeResetsAt(rawResets);
+
+  let resetsInSec = firstNumber(
     bucket.resets_in_seconds,
     bucket.resetsInSec,
     bucket.resets_in_sec,
     bucket.seconds_remaining,
     bucket.remaining_seconds
   );
+  if (resetsInSec == null && resetInfo.resetsInSec != null) {
+    resetsInSec = resetInfo.resetsInSec;
+  }
 
   if (utilization == null || Number.isNaN(utilization)) {
-    if (resetsAt == null && resetsInSec == null) return null;
+    if (resetInfo.resetsAt == null && resetsInSec == null) return null;
     return {
       utilization: 0,
       percent: 0,
-      ...(resetsAt != null ? { resetsAt: String(resetsAt) } : {}),
+      ...(resetInfo.resetsAt != null ? { resetsAt: resetInfo.resetsAt } : {}),
       ...(resetsInSec != null ? { resetsInSec: Number(resetsInSec) } : {}),
     };
   }
@@ -194,7 +260,7 @@ export function normalizeBucket(bucket) {
     utilization: clamped,
     percent: Math.min(100, Math.max(0, Number(percent))),
   };
-  if (resetsAt != null) out.resetsAt = String(resetsAt);
+  if (resetInfo.resetsAt != null) out.resetsAt = resetInfo.resetsAt;
   if (resetsInSec != null) out.resetsInSec = Number(resetsInSec);
   return out;
 }
@@ -202,6 +268,13 @@ export function normalizeBucket(bucket) {
 function pickFirst(obj, keys) {
   for (const k of keys) {
     if (obj[k] != null) return obj[k];
+  }
+  return null;
+}
+
+function firstPresent(...vals) {
+  for (const v of vals) {
+    if (v != null && v !== '') return v;
   }
   return null;
 }
@@ -218,15 +291,6 @@ function firstNumber(...vals) {
     if (v == null || v === '') continue;
     const n = Number(v);
     if (!Number.isNaN(n) && Number.isFinite(n)) return n;
-  }
-  return null;
-}
-
-function firstString(...vals) {
-  for (const v of vals) {
-    if (v == null) continue;
-    const s = String(v);
-    if (s.length) return s;
   }
   return null;
 }
