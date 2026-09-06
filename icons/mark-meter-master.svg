@@ -1,0 +1,22 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background plate -->
+  <rect width="256" height="256" rx="64" fill="#0B0D10"/>
+  
+  <!-- S-hook shape -->
+  <path d="M 128 60 C 100 60 78 82 78 110 C 78 138 100 160 128 160 C 156 160 178 182 178 210 C 178 238 156 260 128 260" 
+        stroke="#F4F6F8" 
+        stroke-width="24" 
+        stroke-linecap="round" 
+        fill="none"/>
+  
+  <!-- Session/weekly meter bars on tracks -->
+  <!-- Top bar track -->
+  <rect x="188" y="85" width="40" height="8" rx="4" fill="#1F1F1F"/>
+  <!-- Top bar fill -->
+  <rect x="188" y="85" width="28" height="8" rx="4" fill="#A894FF"/>
+  
+  <!-- Bottom bar track -->
+  <rect x="188" y="110" width="40" height="8" rx="4" fill="#1F1F1F"/>
+  <!-- Bottom bar fill -->
+  <rect x="188" y="110" width="20" height="8" rx="4" fill="#A894FF"/>
+</svg>
