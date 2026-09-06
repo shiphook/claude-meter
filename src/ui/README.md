@@ -1,16 +1,18 @@
-# Overlay UI (Redline)
+# Overlay UI (Redline) — PRD §6
 
-- `src/ui/overlay.js` — Shadow DOM mount on `#shiphook-claude-meter`, bottom-right
-- `src/ui/overlay.css` — dark Cursor-like; load via `chrome.runtime.getURL("src/ui/overlay.css")` (add to `web_accessible_resources`)
-- Updates: `host.dispatchEvent(new CustomEvent("shiphook-meter:update", { detail: state }))` or `window.__SHIPHOOK_METER__.setState(state)`
-- Collapse chip for low clutter
-- Preview: open `preview/mock.html` after serving the folder (or inject CSS via `__SHIPHOOK_METER_CSS__`)
+- `overlay.js` / `overlay.css` — Shadow DOM `#shiphook-claude-meter`
+- Anchors near composer when found (`[data-cds="ChatComposer"]`, `.rounded-composer`, …); else bottom-right
+- Context % + tools|web|other (count · ~tokens · share) + session/weekly resets
+- Empty/error: `usage unavailable — send a message`
+- Optional cache row when `chrome.storage.local.showCache` + `state.cache`
+- Popup: `src/popup/` — overlay on/off, cache toggle, privacy one-liner, GitHub
 
-Manifest needs:
+## Wire (Always-On)
 ```json
+"action": { "default_popup": "src/popup/popup.html" },
 "web_accessible_resources": [{
   "resources": ["src/ui/overlay.css"],
   "matches": ["https://claude.ai/*"]
 }]
 ```
-Content script should import/execute overlay.js after creating host (or overlay self-mounts).
+Prefs: `enabled` (bool, default true), `showCache` (bool, default false).
