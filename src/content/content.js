@@ -77,8 +77,7 @@
 
   function applyEnabled() {
     if (enabled) {
-      ensureHost();
-      loadOverlay(); pushStateToOverlay();
+      remountOverlayIfNeeded();
       const host = document.getElementById(HOST_ID);
       if (host) host.style.display = '';
     } else {
@@ -90,32 +89,10 @@
     }
   }
 
-  // --- inject MAIN-world fetch hook (session cookies stay in page) ---
+  // MAIN-world fetch-hook is registered via manifest content_scripts world:MAIN.
+  // Keep a no-op for older loads; do not script-tag inject (CSP / ordering issues).
   function injectFetchHook() {
-    try {
-      if (
-        document.documentElement &&
-        document.documentElement.querySelector(
-          'script[data-shiphook-fetch-hook]'
-        )
-      ) {
-        return;
-      }
-    } catch (_) {
-      /* ignore */
-    }
-    const s = document.createElement('script');
-    s.src = chrome.runtime.getURL('src/page/fetch-hook.js');
-    s.async = false;
-    s.dataset.shiphookFetchHook = '1';
-    s.onload = function () {
-      try {
-        s.remove();
-      } catch (_) {
-        /* ignore */
-      }
-    };
-    (document.documentElement || document.head || document).appendChild(s);
+    /* intentional no-op — see manifest world: MAIN entry */
   }
 
   // --- host ---
@@ -598,13 +575,46 @@
     );
   }
 
-  // Reattach host if SPA removes it (overlay also watches; we keep prefs)
+  /** If SPA left an empty host (no ShadowRoot), ask overlay to remount. */
+  function remountOverlayIfNeeded() {
+    if (!enabled) return;
+    const host = ensureHost();
+    if (host && !host.shadowRoot) {
+      try {
+        if (typeof globalThis.__SHIPHOOK_METER_MOUNT__ === 'function') {
+          globalThis.__SHIPHOOK_METER_MOUNT__();
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    pushStateToOverlay();
+  }
+
+  // Reattach host if SPA removes it; remount shadow if host is empty shell
+
+  /** Clean-room lugia-style: keep re-attaching if SPA wipes/hollows the host. */
+  let remountRaf = 0;
+  function startRemountLoop() {
+    if (remountRaf) return;
+    const tick = () => {
+      remountRaf = 0;
+      if (enabled) remountOverlayIfNeeded();
+      remountRaf = requestAnimationFrame(tick);
+    };
+    remountRaf = requestAnimationFrame(tick);
+  }
+
   function watchHost() {
     const obs = new MutationObserver(() => {
       if (!enabled) return;
-      if (!document.getElementById(HOST_ID)) {
-        ensureHost();
-        pushStateToOverlay();
+      const host = document.getElementById(HOST_ID);
+      if (!host) {
+        remountOverlayIfNeeded();
+        return;
+      }
+      if (!host.shadowRoot) {
+        remountOverlayIfNeeded();
       }
     });
     obs.observe(document.documentElement, { childList: true, subtree: true });
@@ -616,21 +626,14 @@
   async function boot() {
     await readPrefs();
     if (enabled) {
-      ensureHost();
-      loadOverlay();
-      // Paint waiting empty-state immediately on /new (don't wait for a chat)
-      pushStateToOverlay();
-      // Overlay content_script may mount a tick later — retry push
-      setTimeout(() => {
-        loadOverlay();
-        pushStateToOverlay();
-      }, 0);
-      setTimeout(() => {
-        loadOverlay();
-        pushStateToOverlay();
-      }, 250);
+      remountOverlayIfNeeded();
+      // Overlay may mount a tick later after SPA — retry
+      setTimeout(() => remountOverlayIfNeeded(), 0);
+      setTimeout(() => remountOverlayIfNeeded(), 250);
+      setTimeout(() => remountOverlayIfNeeded(), 1000);
     }
     watchHost();
+    startRemountLoop();
     scheduleUsagePoll();
   }
 
