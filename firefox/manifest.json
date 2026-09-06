@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Shiphook Claude Meter",
-  "description": "On-device Claude.ai usage and context tracker \u2014 session/weekly limits, approximate tokens, tool breakdown. Never sends data off-device.",
+  "description": "On-device Claude.ai usage and context tracker — session/weekly limits, approximate tokens, tool breakdown. Never sends data off-device.",
   "version": "0.1.11",
   "permissions": [
     "storage"
