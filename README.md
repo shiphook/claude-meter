@@ -1,15 +1,27 @@
 # Shiphook Claude Meter
 
-Free Chrome **MV3** extension — on-page Claude.ai **context %** + **session/weekly usage** meter. Local only. MIT.
+Free **Chromium + Firefox/Zen** MV3 extension — on-page Claude.ai **context %** + **session/weekly usage** meter. Local only. MIT.
 
 **Org:** [shiphook](https://github.com/shiphook) · **UI:** Redline · **Eng:** Always-On · **PRD:** [docs/PRD.md](docs/PRD.md)
 
-## Load unpacked
+## Install
+
+### Chromium (Chrome, Brave, Edge)
 
 1. Open `chrome://extensions`
 2. Enable **Developer mode**
 3. **Load unpacked** → select this folder (`claude-meter`)
 4. Open [claude.ai](https://claude.ai) and chat — overlay mounts bottom-right
+
+### Firefox / Zen Browser
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click **This Firefox** (left sidebar)
+3. Click **Load Temporary Add-on…**
+4. Navigate to the `claude-meter` folder and select `manifest.json`
+5. Open [claude.ai](https://claude.ai) and chat — overlay mounts bottom-right
+
+**Note:** Temporary add-ons unload when you close the browser. For persistent installation, the extension would need to be signed by Mozilla.
 
 ## Preview (UI only)
 
@@ -28,9 +40,12 @@ claude.ai page
 │     calls window.__SHIPHOOK_METER__.setState(state)
 ├── ISOLATED: src/ui/overlay.js (+ overlay.css)  ← Redline
 │     Shadow DOM on #shiphook-claude-meter
-└── service worker: src/background.js
+└── background: src/background.js
+      service worker (Chrome) / event page (Firefox)
       storage helpers only · no network
 ```
+
+**Cross-browser:** Single manifest works on both Chromium and Firefox. Chrome uses `service_worker`, Firefox uses `scripts` (or `service_worker` on Firefox 121+). The `chrome.*` APIs (storage, runtime) work identically on both.
 
 | Signal | Source |
 |--------|--------|

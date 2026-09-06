@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Shiphook Claude Meter",
-  "description": "On-device Claude.ai usage and context tracker \u2014 session/weekly limits, approximate tokens, tool breakdown. Never sends data off-device.",
-  "version": "0.1.8",
+  "description": "On-device Claude.ai usage and context tracker — session/weekly limits, approximate tokens, tool breakdown. Never sends data off-device.",
+  "version": "0.1.9",
   "permissions": [
     "storage"
   ],
@@ -10,7 +10,15 @@
     "https://claude.ai/*"
   ],
   "background": {
-    "service_worker": "src/background.js"
+    "service_worker": "src/background.js",
+    "scripts": ["src/background.js"],
+    "type": "module"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "claude-meter@shiphook.dev",
+      "strict_min_version": "128.0"
+    }
   },
   "content_scripts": [
     {
