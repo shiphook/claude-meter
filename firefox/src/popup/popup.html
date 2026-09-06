@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shiphook Claude Meter</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <strong>Claude Meter</strong>
+    <span class="sub">Shiphook</span>
+  </header>
+
+  <label class="row">
+    <span>Overlay</span>
+    <input id="enabled" type="checkbox" checked />
+  </label>
+
+  <label class="row">
+    <span>Cache timer</span>
+    <input id="showCache" type="checkbox" />
+  </label>
+
+  <p class="note">Metrics from network (local only). Nothing leaves this machine.</p>
+
+  <a class="link" id="github" href="https://github.com/shiphook/claude-meter" target="_blank" rel="noopener noreferrer">GitHub</a>
+
+  <script src="popup.js"></script>
+</body>
+</html>
