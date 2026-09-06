@@ -1,15 +1,27 @@
 # Shiphook Claude Meter
 
-Free Chrome **MV3** extension — on-page Claude.ai **context %** + **session/weekly usage** meter. Local only. MIT.
+Free **Chromium + Firefox/Zen** MV3 extension — on-page Claude.ai **context %** + **session/weekly usage** meter. Local only. MIT.
 
 **Org:** [shiphook](https://github.com/shiphook) · **UI:** Redline · **Eng:** Always-On · **PRD:** [docs/PRD.md](docs/PRD.md)
 
-## Load unpacked
+## Install
+
+### Chromium (Chrome, Brave, Edge)
 
 1. Open `chrome://extensions`
 2. Enable **Developer mode**
 3. **Load unpacked** → select this folder (`claude-meter`)
 4. Open [claude.ai](https://claude.ai) and chat — overlay mounts bottom-right
+
+### Firefox / Zen Browser
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click **This Firefox** (left sidebar)
+3. Click **Load Temporary Add-on…**
+4. Navigate to the `claude-meter` folder and select **`manifest.firefox.json`**
+5. Open [claude.ai](https://claude.ai) and chat — overlay mounts bottom-right
+
+**Note:** Temporary add-ons unload when you close Zen/Firefox. Persistent install needs Mozilla signing (AMO) later.
 
 ## Preview (UI only)
 
@@ -28,9 +40,12 @@ claude.ai page
 │     calls window.__SHIPHOOK_METER__.setState(state)
 ├── ISOLATED: src/ui/overlay.js (+ overlay.css)  ← Redline
 │     Shadow DOM on #shiphook-claude-meter
-└── service worker: src/background.js
+└── background: src/background.js
+      service worker (Chromium `manifest.json`) / scripts event page (`manifest.firefox.json`)
       storage helpers only · no network
 ```
+
+**Cross-browser:** Two manifests, one codebase. Chromium loads `manifest.json` (`service_worker`). Zen/Firefox temporary load uses `manifest.firefox.json` (`background.scripts` + gecko id). Firefox provides `chrome.storage` / `chrome.runtime` compatibility — no separate polyfill vendored in 0.1.9.
 
 | Signal | Source |
 |--------|--------|
@@ -62,6 +77,7 @@ context{ tokensApprox, limit, percent },
 breakdown{ tool_call, web_search, other → { count, tokensApprox? } },
 session{ utilization, percent, resetsAt?, resetsInSec? },
 weekly{ … same },
+chip?{ sessionPercent, weeklyPercent, sessionResetsInSec?, weeklyResetsInSec? },
 cache?, status: ok|waiting|error, error?
 ```
 
