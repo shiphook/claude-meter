@@ -140,8 +140,8 @@ meterState={
 ...partial,
 context:{...meterState.context,...(partial.context  || {}) },
 breakdown:mergeBreakdown(meterState.breakdown,partial.breakdown),
-session:{...meterState.session,...(partial.session  || {}) },
-weekly:{...meterState.weekly,...(partial.weekly  || {}) },
+session:mergeUsageKeep(meterState.session,partial.session  || {}) ,
+weekly:mergeUsageKeep(meterState.weekly,partial.weekly  || {}) ,
 updatedAt:Date.now(),
 };
 if (partial.cache  !== undefined) meterState.cache=partial.cache;
@@ -166,12 +166,35 @@ if (next[k]) out[k]={...prev[k],...next[k] };
 }
 return out;
 }
+function mergeUsageKeep(prev,next){
+if (!next) return prev;
+const hasData=(u)=>{
+if (!u  ||  typeof u  !== 'object') return false;
+const p=Number(u.percent);
+const util=Number(u.utilization);
+return (Number.isFinite(p)  &&  p > 0)  ||  (Number.isFinite(util)  &&  util > 0)  ||  u.resetsAt  ||  u.resetsInSec;
+};
+if (hasData(prev)  &&  !hasData(next)) return prev;
+return next;
+}
+function hasUsageBars(){
+const s=meterState.session;
+const w=meterState.weekly;
+const sNum=Number(s  &&  s.percent);
+const wNum=Number(w  &&  w.percent);
+return (Number.isFinite(sNum)  &&  sNum > 0)  ||  (Number.isFinite(wNum)  &&  wNum > 0);
+}
 window.addEventListener('message',(event)=>{
 if (event.source  !== window) return;
 const msg=event.data;
 if (!msg  ||  msg.source  !== SOURCE) return;
 if (msg.type === 'ready'){
+if (!hasUsageBars()){
 setState({status:meterState.status === 'error' ? 'error' :'waiting' });
+}else{
+pushStateToOverlay();
+}
+requestUsageFetch();
 scheduleUsagePoll();
 return;
 }
@@ -208,7 +231,7 @@ return;
 if (kind === 'message_limit'  ||  kind === 'polled'  ||  kind === 'json'){
 const normalized=normalizeUsageInline(data);
 if (normalized  &&  normalized.empty){
-setState({status:'waiting',error:undefined });
+setState({status:hasUsageBars() ? 'ok' :'waiting',error:undefined });
 }else if (normalized){
 setState({
 session:normalized.session,
@@ -537,6 +560,14 @@ const checkUrl=()=>{
 const currentUrl=location.href;
 if (currentUrl  !== lastUrl){
 lastUrl=currentUrl;
+meterState.context={tokensApprox:0,limit:200000,percent:0 };
+meterState.breakdown={
+tool_call:{count:0,tokensApprox:0 },
+web_search:{count:0,tokensApprox:0 },
+other:{count:0,tokensApprox:0 },
+};
+meterState.model=undefined;
+pushStateToOverlay();
 requestUsageFetch();
 }
 };
@@ -561,6 +592,10 @@ return result;
 injectFetchHook();
 async function boot(){
 await Promise.all([readPrefs(),hydrateUsageSnapshot()]);
+if (hasUsageBars()){
+meterState.status='ok';
+}
+pushStateToOverlay();
 if (enabled){
 remountOverlayIfNeeded();
 setTimeout(()=> remountOverlayIfNeeded(),0);
