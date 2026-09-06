@@ -58,8 +58,13 @@
       return `resets ${(s / 86400).toFixed(1)}d`;
     }
     if (part.resetsAt) {
-      const ms = Number(part.resetsAt) - Date.now();
-      if (ms > 0) return fmtReset({ resetsInSec: Math.round(ms / 1000) });
+      const ts = typeof part.resetsAt === "number"
+        ? part.resetsAt
+        : Date.parse(String(part.resetsAt));
+      if (!Number.isNaN(ts)) {
+        const ms = ts - Date.now();
+        if (ms > 0) return fmtReset({ resetsInSec: Math.round(ms / 1000) });
+      }
     }
     return "";
   }
@@ -70,9 +75,18 @@
       const s = Math.max(0, Number(cache.ttlSecRemaining));
       return s < 60 ? `${s}s` : `${Math.ceil(s / 60)}m`;
     }
-    if (cache.expiresAt) {
-      const s = Math.max(0, Math.round((Number(cache.expiresAt) - Date.now()) / 1000));
+    if (cache.remainingMs != null && !Number.isNaN(Number(cache.remainingMs))) {
+      const s = Math.max(0, Math.round(Number(cache.remainingMs) / 1000));
       return s < 60 ? `${s}s` : `${Math.ceil(s / 60)}m`;
+    }
+    if (cache.expiresAt) {
+      const ts = typeof cache.expiresAt === "number"
+        ? cache.expiresAt
+        : Date.parse(String(cache.expiresAt));
+      if (!Number.isNaN(ts)) {
+        const s = Math.max(0, Math.round((ts - Date.now()) / 1000));
+        return s < 60 ? `${s}s` : `${Math.ceil(s / 60)}m`;
+      }
     }
     return "";
   }
@@ -255,9 +269,13 @@
     const s = state || {};
     const showCache = !!(prefs && prefs.showCache);
 
+    // Free REST null / pre-reply: eng sends status=waiting with zeroed buckets
     const unavailable =
       s.status === "error" ||
-      (s.status === "waiting" && s.context?.percent == null && s.session?.percent == null);
+      (s.status === "waiting" &&
+        !(Number(s.context?.tokensApprox) > 0) &&
+        !(Number(s.session?.percent) > 0) &&
+        !(Number(s.weekly?.percent) > 0));
 
     if (refs.empty) {
       refs.empty.hidden = !unavailable;
