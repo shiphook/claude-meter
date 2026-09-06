@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Shiphook meter overlay preview</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0e0e0e; color: #ccc; font-family: system-ui, sans-serif; }
+    main { padding: 48px; max-width: 640px; }
+    h1 { font-size: 18px; font-weight: 600; color: #eee; }
+    p { color: #888; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>claude.ai mock</h1>
+    <p>Overlay should sit bottom-right. Fake MeterState injected after load.</p>
+  </main>
+  <script>
+    fetch('../src/ui/overlay.css').then(r => r.text()).then(css => {
+      window.__SHIPHOOK_METER_CSS__ = css;
+      const s = document.createElement('script');
+      s.src = '../src/ui/overlay.js';
+      s.onload = () => {
+        window.__SHIPHOOK_METER__.setState({
+          updatedAt: Date.now(),
+          model: 'claude-sonnet-4',
+          context: { tokensApprox: 84200, limit: 200000, percent: 42 },
+          breakdown: {
+            tool_call: { count: 6, tokensApprox: 21000 },
+            web_search: { count: 2, tokensApprox: 8000 },
+            other: { count: 40, tokensApprox: 55200 }
+          },
+          session: { utilization: 0.31, percent: 31, resetsInSec: 9800 },
+          weekly: { utilization: 0.58, percent: 58, resetsInSec: 302400 },
+          status: 'ok'
+        });
+      };
+      document.body.appendChild(s);
+    });
+  </script>
+</body>
+</html>
