@@ -1,1 +1,1 @@
-@/tmp/cjs.txt
+PLACEHOLDER_LOAD_FROM_FILE
