@@ -2,11 +2,13 @@
 'use strict';
 const SOURCE='shiphook-claude-meter';
 const HOST_ID='shiphook-claude-meter';
+const PERSIST_KEY='shiphook_usage_snapshot';
 let enabled=true;
 let showCache=false;
 let overlayLoaded=false;
 let meterState=createEmptyState();
 let lastOrgId=null;
+let hydrateComplete=false;
 function createEmptyState(){
 const bucket=()=> ({count:0,tokensApprox:0 });
 const usage=()=> ({utilization:0,percent:0 });
@@ -33,6 +35,38 @@ showCache=false;
 resolve({enabled,showCache });
 }
 });
+}
+function hydrateUsageSnapshot(){
+return new Promise((resolve)=>{
+try{
+chrome.storage.local.get(PERSIST_KEY,(result)=>{
+const snapshot=result[PERSIST_KEY];
+if (snapshot  &&  typeof snapshot === 'object'){
+if (snapshot.session) meterState.session={...meterState.session,...snapshot.session };
+if (snapshot.weekly) meterState.weekly={...meterState.weekly,...snapshot.weekly };
+if (snapshot.orgId) lastOrgId=snapshot.orgId;
+meterState.updatedAt=Date.now();
+}
+hydrateComplete=true;
+resolve();
+});
+}catch (_){
+hydrateComplete=true;
+resolve();
+}
+});
+}
+function persistUsageSnapshot(){
+if (!hydrateComplete) return;
+try{
+const snapshot={
+session:meterState.session,
+weekly:meterState.weekly,
+orgId:lastOrgId  ||  null,
+updatedAt:Date.now(),
+};
+chrome.storage.local.set({[PERSIST_KEY]:snapshot });
+}catch (_){}
 }
 try{
 chrome.storage.onChanged.addListener((changes,area)=>{
@@ -100,6 +134,7 @@ host.dispatchEvent(new CustomEvent('shiphook-meter:update',{detail:stateForUi() 
 }
 }
 function setState(partial){
+const hadSessionOrWeekly=partial.session  ||  partial.weekly;
 meterState={
 ...meterState,
 ...partial,
@@ -113,6 +148,7 @@ if (partial.cache  !== undefined) meterState.cache=partial.cache;
 if (partial.model  !== undefined) meterState.model=partial.model;
 if (partial.error  !== undefined) meterState.error=partial.error;
 if (partial.status) meterState.status=partial.status;
+if (hadSessionOrWeekly) persistUsageSnapshot();
 pushStateToOverlay();
 try{
 chrome.runtime.sendMessage({
@@ -140,7 +176,12 @@ scheduleUsagePoll();
 return;
 }
 if (msg.type === 'org'  &&  msg.payload  &&  msg.payload.orgId){
-lastOrgId=String(msg.payload.orgId);
+const newOrgId=String(msg.payload.orgId);
+if (newOrgId  !== lastOrgId){
+lastOrgId=newOrgId;
+persistUsageSnapshot();
+requestUsageFetch();
+}
 scheduleUsagePoll();
 return;
 }
@@ -490,9 +531,36 @@ if (!host  ||  !host.shadowRoot) remountOverlayIfNeeded();
 });
 obs.observe(document.documentElement,{childList:true,subtree:true });
 }
+function watchUrlChanges(){
+let lastUrl=location.href;
+const checkUrl=()=>{
+const currentUrl=location.href;
+if (currentUrl  !== lastUrl){
+lastUrl=currentUrl;
+requestUsageFetch();
+}
+};
+window.addEventListener('popstate',checkUrl,{passive:true });
+const originalPushState=history.pushState;
+const originalReplaceState=history.replaceState;
+if (originalPushState){
+history.pushState=function(...args){
+const result=originalPushState.apply(this,args);
+checkUrl();
+return result;
+};
+}
+if (originalReplaceState){
+history.replaceState=function(...args){
+const result=originalReplaceState.apply(this,args);
+checkUrl();
+return result;
+};
+}
+}
 injectFetchHook();
 async function boot(){
-await readPrefs();
+await Promise.all([readPrefs(),hydrateUsageSnapshot()]);
 if (enabled){
 remountOverlayIfNeeded();
 setTimeout(()=> remountOverlayIfNeeded(),0);
@@ -501,7 +569,9 @@ setTimeout(()=> remountOverlayIfNeeded(),1000);
 }
 watchHost();
 startRemountLoop();
+requestUsageFetch();
 scheduleUsagePoll();
+watchUrlChanges();
 try{
 window.postMessage({source:SOURCE,type:'request_ready' },'*');
 }catch (_){}
