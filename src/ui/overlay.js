@@ -18,7 +18,6 @@
       : null;
 
   const COMPOSER_SELECTORS = [
-    '[data-testid="chat-input"]',
     '[data-cds="ChatComposer"]',
     ".rounded-composer",
     "fieldset.rounded-composer",
@@ -433,16 +432,6 @@
     else if (window.__SHIPHOOK_METER__?.reposition) window.__SHIPHOOK_METER__.reposition();
   });
   mo.observe(document.documentElement, { childList: true, subtree: true });
-
-  // rAF keep-alive: remount if shadow root is missing
-  function keepAlive() {
-    const host = document.getElementById(HOST_ID);
-    if (host && !host.shadowRoot) {
-      mount();
-    }
-    requestAnimationFrame(keepAlive);
-  }
-  requestAnimationFrame(keepAlive);
 
   globalThis.__SHIPHOOK_METER_MOUNT__ = mount;
 })();
