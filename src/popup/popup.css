@@ -1,0 +1,52 @@
+:root {
+  color-scheme: dark;
+  --bg: #0f0f0f;
+  --ink: #f2f2f2;
+  --muted: #a3a3a3;
+  --border: #3a3a3a;
+  --accent: #a894ff;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  width: 260px;
+  padding: 12px 14px 14px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 12px/1.4 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+}
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+header strong { font-size: 13px; }
+.sub { color: var(--muted); font-size: 11px; }
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.note {
+  margin: 10px 0 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+.link:hover { text-decoration: underline; }
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
