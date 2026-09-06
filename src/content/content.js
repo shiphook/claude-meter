@@ -19,6 +19,8 @@
   let showCache = false;
   /** @type {boolean} */
   let overlayLoaded = false;
+  /** @type {string|null} */
+  let lastOrgId = null;
 
   let meterState = createEmptyState();
 
@@ -209,6 +211,12 @@
       scheduleUsagePoll();
       return;
     }
+    if (msg.type === 'org') {
+      if (msg.payload && msg.payload.orgId) {
+        lastOrgId = msg.payload.orgId;
+      }
+      return;
+    }
     if (msg.type === 'usage') {
       handleUsagePayload(msg.payload);
       return;
@@ -217,6 +225,9 @@
       handleSsePayload(msg.payload);
     }
   });
+
+  // Request ready signal from MAIN world
+  window.postMessage({ source: SOURCE, type: 'request_ready' }, '*');
 
   function handleUsagePayload(payload) {
     if (!payload) return;
@@ -237,6 +248,12 @@
     }
 
     if (kind === 'message_limit' || kind === 'polled' || kind === 'json') {
+      // When kind===json with messages, ALWAYS walk tree BEFORE returning on empty
+      if (kind === 'json' && data && (data.chat_messages || data.messages)) {
+        applyConversationTree(data);
+        return;
+      }
+
       const normalized = normalizeUsageInline(data);
       if (normalized && normalized.empty) {
         // Free plan REST null → fail soft empty / waiting
@@ -250,9 +267,6 @@
           status: 'ok',
           error: undefined,
         });
-      }
-      if (kind === 'json' && data && (data.chat_messages || data.messages)) {
-        applyConversationTree(data);
       }
     }
   }
@@ -457,12 +471,20 @@
       }
       if (util == null && b.percent != null) util = Number(b.percent) / 100;
       const resetsAt = str(b.resets_at, b.resetsAt, b.reset_at, b.resetAt);
-      const resetsInSec = num(
+      let resetsInSec = num(
         b.resets_in_seconds,
         b.resetsInSec,
         b.resets_in_sec,
         b.seconds_remaining
       );
+      // Parse resets_at: number < 1e12 → unix seconds → ms epoch
+      if (resetsAt != null && resetsInSec == null) {
+        const n = Number(resetsAt);
+        if (!Number.isNaN(n) && Number.isFinite(n)) {
+          const ms = n < 1e12 ? n * 1000 : n;
+          resetsInSec = Math.max(0, Math.floor((ms - Date.now()) / 1000));
+        }
+      }
       if (util == null) {
         if (resetsAt == null && resetsInSec == null) return null;
         return {
@@ -490,7 +512,12 @@
       apiJson.messageLimit ||
       (apiJson.type === 'message_limit' ? apiJson : apiJson);
 
+    // Parse windows["5h"] → session, windows["7d"] → weekly
+    const windows = root.windows || apiJson.windows || null;
     const sessionSrc =
+      (windows && typeof windows === 'object'
+        ? windows['5h'] || windows['5H'] || windows.session
+        : null) ||
       root.five_hour ||
       root.fiveHour ||
       root.session ||
@@ -498,6 +525,9 @@
       apiJson.five_hour ||
       apiJson.session;
     const weeklySrc =
+      (windows && typeof windows === 'object'
+        ? windows['7d'] || windows['7D'] || windows.weekly
+        : null) ||
       root.seven_day ||
       root.sevenDay ||
       root.weekly ||
@@ -520,6 +550,9 @@
 
   // --- org id + usage poll (best-effort) ---
   function readLastActiveOrg() {
+    // Prefer lastOrgId from fetch-hook org messages
+    if (lastOrgId) return lastOrgId;
+
     try {
       const cookies = document.cookie.split(';');
       for (const c of cookies) {
@@ -635,6 +668,8 @@
     watchHost();
     startRemountLoop();
     scheduleUsagePoll();
+    // Request ready signal from MAIN world at boot
+    window.postMessage({ source: SOURCE, type: 'request_ready' }, '*');
   }
 
   if (document.readyState === 'loading') {
