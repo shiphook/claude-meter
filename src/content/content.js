@@ -166,12 +166,26 @@ if (next[k]) out[k]={...prev[k],...next[k] };
 }
 return out;
 }
+function hasUsageBars(state){
+const sp=state && state.session && state.session.percent;
+const wp=state && state.weekly && state.weekly.percent;
+return (sp != null && sp > 0) || (wp != null && wp > 0);
+}
+function mergeUsageKeep(existing,incoming){
+if (!incoming) return existing;
+const hasExisting=hasUsageBars({session:existing.session,weekly:existing.weekly});
+if (!hasExisting) return incoming;
+const hasIncoming=hasUsageBars({session:incoming.session,weekly:incoming.weekly});
+if (!hasIncoming) return existing;
+return incoming;
+}
 window.addEventListener('message',(event)=>{
 if (event.source  !== window) return;
 const msg=event.data;
 if (!msg  ||  msg.source  !== SOURCE) return;
 if (msg.type === 'ready'){
-setState({status:meterState.status === 'error' ? 'error' :'waiting' });
+const hasData=hasUsageBars(meterState);
+setState({status:meterState.status === 'error' ? 'error' : (hasData ? meterState.status : 'waiting') });
 scheduleUsagePoll();
 return;
 }
@@ -210,9 +224,13 @@ const normalized=normalizeUsageInline(data);
 if (normalized  &&  normalized.empty){
 setState({status:'waiting',error:undefined });
 }else if (normalized){
+const merged=mergeUsageKeep(
+{session:meterState.session,weekly:meterState.weekly},
+{session:normalized.session,weekly:normalized.weekly}
+);
 setState({
-session:normalized.session,
-weekly:normalized.weekly,
+session:merged.session,
+weekly:merged.weekly,
 status:'ok',
 error:undefined,
 });
