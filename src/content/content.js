@@ -74,6 +74,18 @@ return host;
 function stateForUi(){
 const out={...meterState };
 if (!showCache) delete out.cache;
+// Always expose finite session/weekly percents for collapsed chip (Redline)
+const sp=Number(out.session && out.session.percent);
+const wp=Number(out.weekly && out.weekly.percent);
+out.session={...(out.session||{}),percent:Number.isFinite(sp)?sp:0,utilization:Number(out.session&&out.session.utilization)||0};
+out.weekly={...(out.weekly||{}),percent:Number.isFinite(wp)?wp:0,utilization:Number(out.weekly&&out.weekly.utilization)||0};
+// Collapsed pill: session+weekly bars (not context %). Redline chip layout.
+out.chip={
+sessionPercent:out.session.percent,
+weeklyPercent:out.weekly.percent,
+sessionResetsInSec:out.session.resetsInSec,
+weeklyResetsInSec:out.weekly.resetsInSec,
+};
 return out;
 }
 function pushStateToOverlay(){
