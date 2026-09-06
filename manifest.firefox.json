@@ -10,7 +10,13 @@
     "https://claude.ai/*"
   ],
   "background": {
-    "service_worker": "src/background.js"
+    "scripts": ["src/background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "claude-meter@shiphook.dev",
+      "strict_min_version": "128.0"
+    }
   },
   "content_scripts": [
     {

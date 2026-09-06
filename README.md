@@ -18,7 +18,7 @@ Free **Chromium + Firefox/Zen** MV3 extension — on-page Claude.ai **context %*
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click **This Firefox** (left sidebar)
 3. Click **Load Temporary Add-on…**
-4. Navigate to the `claude-meter` folder and select `manifest.json`
+4. Navigate to the `claude-meter` folder and select **`manifest.firefox.json`**
 5. Open [claude.ai](https://claude.ai) and chat — overlay mounts bottom-right
 
 **Note:** Temporary add-ons unload when you close the browser. For persistent installation, the extension would need to be signed by Mozilla.
@@ -45,7 +45,7 @@ claude.ai page
       storage helpers only · no network
 ```
 
-**Cross-browser:** Single manifest works on both Chromium and Firefox. Chrome uses `service_worker`, Firefox uses `scripts` (or `service_worker` on Firefox 121+). The `chrome.*` APIs (storage, runtime) work identically on both.
+**Cross-browser:** Dual manifests for compatibility. `manifest.json` (Chromium) uses `service_worker`; `manifest.firefox.json` (Firefox/Zen) uses `scripts`. The `chrome.*` APIs (storage, runtime) work identically on both platforms.
 
 | Signal | Source |
 |--------|--------|
