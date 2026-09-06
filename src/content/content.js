@@ -2,7 +2,7 @@
 'use strict';
 const SOURCE='shiphook-claude-meter';
 const HOST_ID='shiphook-claude-meter';
-const PERSIST_KEY='shiphook_usage_snapshot_v2';
+const PERSIST_KEY='shiphook_usage_snapshot_v3';
 let enabled=true;
 let showCache=false;
 let overlayLoaded=false;
@@ -44,6 +44,9 @@ const snapshot=result[PERSIST_KEY];
 if (snapshot  &&  typeof snapshot === 'object'){
 if (snapshot.session) meterState.session={...meterState.session,...snapshot.session };
 if (snapshot.weekly) meterState.weekly={...meterState.weekly,...snapshot.weekly };
+if (snapshot.context) meterState.context={...meterState.context,...snapshot.context };
+if (snapshot.breakdown) meterState.breakdown=mergeBreakdown(meterState.breakdown,snapshot.breakdown);
+if (snapshot.model) meterState.model=snapshot.model;
 if (snapshot.orgId) lastOrgId=snapshot.orgId;
 meterState.updatedAt=Date.now();
 }
@@ -62,6 +65,9 @@ try{
 const snapshot={
 session:meterState.session,
 weekly:meterState.weekly,
+context:meterState.context,
+breakdown:meterState.breakdown,
+model:meterState.model  ||  null,
 orgId:lastOrgId  ||  null,
 updatedAt:Date.now(),
 };
@@ -134,7 +140,7 @@ host.dispatchEvent(new CustomEvent('shiphook-meter:update',{detail:stateForUi() 
 }
 }
 function setState(partial){
-const hadSessionOrWeekly=partial.session  ||  partial.weekly;
+const shouldPersist=partial.session  ||  partial.weekly  ||  partial.context  ||  partial.breakdown  ||  (partial.model  !== undefined);
 meterState={
 ...meterState,
 ...partial,
@@ -148,7 +154,7 @@ if (partial.cache  !== undefined) meterState.cache=partial.cache;
 if (partial.model  !== undefined) meterState.model=partial.model;
 if (partial.error  !== undefined) meterState.error=partial.error;
 if (partial.status) meterState.status=partial.status;
-if (hadSessionOrWeekly) persistUsageSnapshot();
+if (shouldPersist) persistUsageSnapshot();
 pushStateToOverlay();
 try{
 chrome.runtime.sendMessage({
@@ -348,7 +354,15 @@ const remainingMs=expiresAt - Date.now();
 if (remainingMs > 0) cache={expiresAt,remainingMs };
 }
 }catch (_){}
-const patch={model,context:{tokensApprox,limit,percent },breakdown,status:'ok' };
+const hasExistingContext=meterState.context  &&  meterState.context.tokensApprox > 0;
+const computedEmpty=tokensApprox === 0  ||  trunk.length === 0;
+const patch={status:'ok' };
+if (model) patch.model=model;
+if (computedEmpty  &&  hasExistingContext){
+}else{
+patch.context={tokensApprox,limit,percent };
+patch.breakdown=breakdown;
+}
 if (cache) patch.cache=cache;
 setState(patch);
 }catch (err){
@@ -594,14 +608,6 @@ lastUrl=currentUrl;
 const currentConversationId=extractConversationId(currentUrl);
 if (currentConversationId  !== lastConversationId){
 lastConversationId=currentConversationId;
-setState({
-context:{tokensApprox:0,limit:meterState.context.limit  ||  200000,percent:0 },
-breakdown:{
-tool_call:{count:0,tokensApprox:0 },
-web_search:{count:0,tokensApprox:0 },
-other:{count:0,tokensApprox:0 },
-},
-});
 }
 if (currentConversationId){
 requestConversationTree(currentConversationId);
