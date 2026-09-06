@@ -2,7 +2,7 @@
 'use strict';
 const SOURCE='shiphook-claude-meter';
 const HOST_ID='shiphook-claude-meter';
-const PERSIST_KEY='shiphook_usage_snapshot_v2';
+const PERSIST_KEY='shiphook_usage_snapshot_v3';
 let enabled=true;
 let showCache=false;
 let overlayLoaded=false;
@@ -44,6 +44,7 @@ const snapshot=result[PERSIST_KEY];
 if (snapshot  &&  typeof snapshot === 'object'){
 if (snapshot.session) meterState.session={...meterState.session,...snapshot.session };
 if (snapshot.weekly) meterState.weekly={...meterState.weekly,...snapshot.weekly };
+if (snapshot.context) meterState.context={...meterState.context,...snapshot.context };
 if (snapshot.orgId) lastOrgId=snapshot.orgId;
 meterState.updatedAt=Date.now();
 }
@@ -62,6 +63,7 @@ try{
 const snapshot={
 session:meterState.session,
 weekly:meterState.weekly,
+context:meterState.context,
 orgId:lastOrgId  ||  null,
 updatedAt:Date.now(),
 };
@@ -135,6 +137,7 @@ host.dispatchEvent(new CustomEvent('shiphook-meter:update',{detail:stateForUi() 
 }
 function setState(partial){
 const hadSessionOrWeekly=partial.session  ||  partial.weekly;
+const hadContext=partial.context;
 meterState={
 ...meterState,
 ...partial,
@@ -148,7 +151,7 @@ if (partial.cache  !== undefined) meterState.cache=partial.cache;
 if (partial.model  !== undefined) meterState.model=partial.model;
 if (partial.error  !== undefined) meterState.error=partial.error;
 if (partial.status) meterState.status=partial.status;
-if (hadSessionOrWeekly) persistUsageSnapshot();
+if (hadSessionOrWeekly  ||  hadContext) persistUsageSnapshot();
 pushStateToOverlay();
 try{
 chrome.runtime.sendMessage({
@@ -177,6 +180,13 @@ const hasExisting=hasUsageBars({session:existing.session,weekly:existing.weekly}
 if (!hasExisting) return incoming;
 const hasIncoming=hasUsageBars({session:incoming.session,weekly:incoming.weekly});
 if (!hasIncoming) return existing;
+return incoming;
+}
+function mergeContextKeep(existing,incoming){
+if (!incoming) return existing;
+const priorTok=Number(existing  &&  existing.tokensApprox)  ||  0;
+const incomingTok=Number(incoming  &&  incoming.tokensApprox)  ||  0;
+if (incomingTok <= 0  &&  priorTok > 0) return existing;
 return incoming;
 }
 window.addEventListener('message',(event)=>{
@@ -348,7 +358,11 @@ const remainingMs=expiresAt - Date.now();
 if (remainingMs > 0) cache={expiresAt,remainingMs };
 }
 }catch (_){}
-const patch={model,context:{tokensApprox,limit,percent },breakdown,status:'ok' };
+const mergedContext=mergeContextKeep(
+meterState.context,
+{tokensApprox,limit,percent }
+);
+const patch={model,context:mergedContext,breakdown,status:'ok' };
 if (cache) patch.cache=cache;
 setState(patch);
 }catch (err){
