@@ -78,7 +78,7 @@
   function applyEnabled() {
     if (enabled) {
       ensureHost();
-      loadOverlay().then(() => pushStateToOverlay());
+      loadOverlay(); pushStateToOverlay();
       const host = document.getElementById(HOST_ID);
       if (host) host.style.display = '';
     } else {
@@ -134,37 +134,22 @@
   }
 
   /**
-   * Load Redline overlay.js in the ISOLATED world so chrome.runtime.getURL
-   * works for overlay.css (web_accessible_resources). Do not inject into MAIN.
-   * Does not overwrite Redline sources — executes their file as-is.
+   * Overlay is loaded via manifest content_scripts (overlay.js before this file).
+   * MV3 extension CSP blocks eval — never fetch+eval overlay.js.
    */
-  async function loadOverlay() {
+  function loadOverlay() {
     if (!enabled) return null;
-    if (window.__SHIPHOOK_METER__) {
-      overlayLoaded = true;
-      return window.__SHIPHOOK_METER__;
-    }
-    if (overlayLoaded) return window.__SHIPHOOK_METER__ || null;
-
     ensureHost();
-    try {
-      const url = chrome.runtime.getURL('src/ui/overlay.js');
-      const res = await fetch(url);
-      const code = await res.text();
-      // eslint-disable-next-line no-eval
-      (0, eval)(code);
+    const api = window.__SHIPHOOK_METER__;
+    if (api) {
       overlayLoaded = true;
-    } catch (err) {
-      setState({
-        status: 'error',
-        error:
-          err && err.message
-            ? 'overlay_load: ' + err.message
-            : 'overlay_load_failed',
-      });
-      return null;
+      if (typeof api.reposition === 'function') {
+        try { api.reposition(); } catch (_) { /* ignore */ }
+      }
+      return api;
     }
-    return window.__SHIPHOOK_METER__ || null;
+    // Overlay content script may still be mounting — host stays for MutationObserver
+    return null;
   }
 
   function stateForUi() {
@@ -632,8 +617,18 @@
     await readPrefs();
     if (enabled) {
       ensureHost();
-      await loadOverlay();
+      loadOverlay();
+      // Paint waiting empty-state immediately on /new (don't wait for a chat)
       pushStateToOverlay();
+      // Overlay content_script may mount a tick later — retry push
+      setTimeout(() => {
+        loadOverlay();
+        pushStateToOverlay();
+      }, 0);
+      setTimeout(() => {
+        loadOverlay();
+        pushStateToOverlay();
+      }, 250);
     }
     watchHost();
     scheduleUsagePoll();
