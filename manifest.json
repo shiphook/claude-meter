@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Shiphook Claude Meter",
+  "description": "On-device Claude.ai usage and context tracker \u2014 session/weekly limits, approximate tokens, tool breakdown. Never sends data off-device.",
+  "version": "0.1.0",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://claude.ai/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://claude.ai/*"
+      ],
+      "js": [
+        "src/content/content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/page/fetch-hook.js",
+        "src/ui/*"
+      ],
+      "matches": [
+        "https://claude.ai/*"
+      ]
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Shiphook Claude Meter"
+  }
+}
