@@ -1,0 +1,17 @@
+{
+  "name": "Shiphook Claude Meter",
+  "install": "node --check src/background.js && node --check src/content/content.js && node --check src/page/fetch-hook.js && node --check src/ui/overlay.js && node --check src/popup/popup.js && node --check src/lib/tokens.js && node --check src/lib/usage.js && node -e \"['manifest.json','manifest.firefox.json','firefox/manifest.json'].forEach(f=>{JSON.parse(require('fs').readFileSync(f,'utf8'))})\" && echo 'claude-meter: source validated (no dependencies to install)'",
+  "terminals": [
+    {
+      "name": "preview-server",
+      "command": "python3 -m http.server 8000",
+      "description": "Static file server for the repo root. Open the standalone UI preview at http://localhost:8000/preview/mock.html (see src/ui/README.md)."
+    }
+  ],
+  "ports": [
+    {
+      "name": "preview",
+      "port": 8000
+    }
+  ]
+}
