@@ -3,7 +3,7 @@
  * PRD: near composer, context % primary, tools|web|other, session+weekly+resets,
  * optional cache, high contrast, empty/error: "usage unavailable — send a message"
  *
- * Mount: #shiphook-claude-meter
+ * Mount: #shiphook-claude-meter (fixed, bottom-right; .panel positions itself)
  * Updates: CustomEvent "shiphook-meter:update" | window.__SHIPHOOK_METER__.setState(state)
  * Prefs (chrome.storage.local): enabled (bool), showCache (bool)
  * No network from UI.
@@ -17,15 +17,8 @@
       ? chrome.runtime.getURL("src/ui/overlay.css")
       : null;
 
-  const COMPOSER_SELECTORS = [
-    '[data-testid="chat-input"]',
-    '[data-cds="ChatComposer"]',
-    ".rounded-composer",
-    "fieldset.rounded-composer",
-    '[class*="ChatComposer"]',
-    "form[class*='composer']",
-    "main form textarea",
-  ];
+  // Countdowns (resets, cache) re-render at this rate while the tab is visible.
+  const TICK_MS = 30_000;
 
   function clampPct(n) {
     if (n == null || Number.isNaN(Number(n))) return null;
@@ -49,92 +42,78 @@
     return String(Math.round(v));
   }
 
+  function fmtDuration(s) {
+    if (s < 60) return `resets ${s}s`;
+    if (s < 3600) return `resets ${Math.round(s / 60)}m`;
+    if (s < 86400) return `resets ${(s / 3600).toFixed(1)}h`;
+    return `resets ${(s / 86400).toFixed(1)}d`;
+  }
+
+  // Prefer the absolute resetsAt so the countdown moves between updates;
+  // resetsInSec is a snapshot and only a fallback.
   function fmtReset(part) {
     if (!part) return "";
-    if (part.resetsInSec != null && !Number.isNaN(Number(part.resetsInSec))) {
-      const s = Math.max(0, Number(part.resetsInSec));
-      if (s < 60) return `resets ${s}s`;
-      if (s < 3600) return `resets ${Math.round(s / 60)}m`;
-      if (s < 86400) return `resets ${(s / 3600).toFixed(1)}h`;
-      return `resets ${(s / 86400).toFixed(1)}d`;
-    }
     if (part.resetsAt) {
       const ts = typeof part.resetsAt === "number"
         ? part.resetsAt
         : Date.parse(String(part.resetsAt));
       if (!Number.isNaN(ts)) {
         const ms = ts - Date.now();
-        if (ms > 0) return fmtReset({ resetsInSec: Math.round(ms / 1000) });
+        return ms > 0 ? fmtDuration(Math.round(ms / 1000)) : "";
       }
+    }
+    if (part.resetsInSec != null && !Number.isNaN(Number(part.resetsInSec))) {
+      return fmtDuration(Math.max(0, Number(part.resetsInSec)));
     }
     return "";
   }
 
   function fmtCache(cache) {
     if (!cache) return "";
-    if (cache.ttlSecRemaining != null && !Number.isNaN(Number(cache.ttlSecRemaining))) {
-      const s = Math.max(0, Number(cache.ttlSecRemaining));
-      return s < 60 ? `${s}s` : `${Math.ceil(s / 60)}m`;
-    }
-    if (cache.remainingMs != null && !Number.isNaN(Number(cache.remainingMs))) {
-      const s = Math.max(0, Math.round(Number(cache.remainingMs) / 1000));
-      return s < 60 ? `${s}s` : `${Math.ceil(s / 60)}m`;
-    }
+    let s = null;
     if (cache.expiresAt) {
       const ts = typeof cache.expiresAt === "number"
         ? cache.expiresAt
         : Date.parse(String(cache.expiresAt));
-      if (!Number.isNaN(ts)) {
-        const s = Math.max(0, Math.round((ts - Date.now()) / 1000));
-        return s < 60 ? `${s}s` : `${Math.ceil(s / 60)}m`;
-      }
+      if (!Number.isNaN(ts)) s = Math.round((ts - Date.now()) / 1000);
     }
-    return "";
-  }
-
-  function findComposer() {
-    for (const sel of COMPOSER_SELECTORS) {
-      try {
-        const el = document.querySelector(sel);
-        if (el && el.getBoundingClientRect().height > 0) return el;
-      } catch (_) {}
+    if (s == null && cache.ttlSecRemaining != null && !Number.isNaN(Number(cache.ttlSecRemaining))) {
+      s = Number(cache.ttlSecRemaining);
     }
-    return null;
+    if (s == null && cache.remainingMs != null && !Number.isNaN(Number(cache.remainingMs))) {
+      s = Math.round(Number(cache.remainingMs) / 1000);
+    }
+    if (s == null || s <= 0) return "";
+    return s < 60 ? `${s}s` : `${Math.ceil(s / 60)}m`;
   }
 
   function ensureHost() {
-    let host = document.getElementById(HOST_ID);
+    // Reuse a detached host: re-appending keeps its shadow root, so no rebuild.
+    let host = document.getElementById(HOST_ID) || (api && api.host);
     if (!host) {
       host = document.createElement("div");
       host.id = HOST_ID;
       host.setAttribute("role", "region");
       host.setAttribute("aria-label", "Claude usage meter");
-      (document.documentElement || document.body).appendChild(host);
+    }
+    if (!host.isConnected) (document.documentElement || document.body).appendChild(host);
+    // Set once. .panel is position:fixed itself, so the host needs no layout
+    // work after this.
+    if (!host.dataset.styled) {
+      host.style.cssText = "position:fixed;z-index:2147483646;pointer-events:none;";
+      host.dataset.styled = "1";
     }
     return host;
   }
 
-  function positionHost(host) {
-    const composer = findComposer();
-    host.style.cssText = "";
-    host.style.position = "fixed";
-    host.style.zIndex = "2147483646";
-    host.style.pointerEvents = "none";
-    if (composer) {
-      const r = composer.getBoundingClientRect();
-      // sit above-right of composer; keep on-screen
-      const top = Math.max(8, r.top - 8);
-      const right = Math.max(8, window.innerWidth - r.right);
-      host.style.top = `${Math.min(top, window.innerHeight - 120)}px`;
-      host.style.right = `${right}px`;
-      host.style.bottom = "auto";
-      host.dataset.anchor = "composer";
-    } else {
-      host.style.right = "14px";
-      host.style.bottom = "14px";
-      host.style.top = "auto";
-      host.dataset.anchor = "corner";
-    }
+  // Only touch the DOM when a value changes; unchanged writes still dirty style.
+  function setText(el, v) {
+    if (el && el.textContent !== v) el.textContent = v;
+  }
+
+  function setWidth(el, pct) {
+    const v = pct == null ? "0%" : `${Math.round(pct * 100) / 100}%`;
+    if (el && el.style.width !== v) el.style.width = v;
   }
 
   function createUi(shadow) {
@@ -297,14 +276,14 @@
         !(Number(s.weekly?.percent) > 0));
 
     if (refs.empty) {
-      refs.empty.hidden = !unavailable;
-      if (unavailable) refs.empty.textContent = s.error || ERR_COPY;
+      if (refs.empty.hidden !== !unavailable) refs.empty.hidden = !unavailable;
+      if (unavailable) setText(refs.empty, s.error || ERR_COPY);
     }
 
     const ctxPct = clampPct(s.context?.percent);
-    refs.contextPct.textContent = fmtPct(ctxPct);
-    refs.contextFill.style.width = ctxPct == null ? "0%" : `${ctxPct}%`;
-    refs.model.textContent = s.model ? s.model.replace(/^claude-/, "") : "";
+    setText(refs.contextPct, fmtPct(ctxPct));
+    setWidth(refs.contextFill, ctxPct);
+    setText(refs.model, s.model ? s.model.replace(/^claude-/, "") : "");
 
     // Collapsed chip: session + weekly mini-bars (prefer chip.* overrides from eng)
     const chipSessionPct = clampPct(
@@ -313,56 +292,57 @@
     const chipWeeklyPct = clampPct(
       s.chip?.weeklyPercent != null ? s.chip.weeklyPercent : s.weekly?.percent
     );
-    refs.chipSessionPct.textContent = fmtPct(chipSessionPct);
-    refs.chipSessionFill.style.width = chipSessionPct == null ? "0%" : `${chipSessionPct}%`;
-    refs.chipWeeklyPct.textContent = fmtPct(chipWeeklyPct);
-    refs.chipWeeklyFill.style.width = chipWeeklyPct == null ? "0%" : `${chipWeeklyPct}%`;
+    setText(refs.chipSessionPct, fmtPct(chipSessionPct));
+    setWidth(refs.chipSessionFill, chipSessionPct);
+    setText(refs.chipWeeklyPct, fmtPct(chipWeeklyPct));
+    setWidth(refs.chipWeeklyFill, chipWeeklyPct);
 
     // model-aware limit from eng — never hardcode 200k in UI
     if (refs.contextDetail) {
       const used = s.context?.tokensApprox;
       const limit = s.context?.limit;
       if (used != null || limit != null) {
-        refs.contextDetail.textContent = `${fmtTokens(used)} / ${fmtTokens(limit)}`;
+        setText(refs.contextDetail, `${fmtTokens(used)} / ${fmtTokens(limit)}`);
       } else {
-        refs.contextDetail.textContent = "";
+        setText(refs.contextDetail, "");
       }
     }
 
     const shares = breakdownShares(s.breakdown);
-    refs.segT.style.width = `${shares.t}%`;
-    refs.segW.style.width = `${shares.w}%`;
-    refs.segO.style.width = `${shares.o}%`;
+    setWidth(refs.segT, shares.t);
+    setWidth(refs.segW, shares.w);
+    setWidth(refs.segO, shares.o);
     const bd = s.breakdown || {};
-    refs.tools.textContent = breakdownLabel(bd.tool_call, shares.t);
-    refs.web.textContent = breakdownLabel(bd.web_search, shares.w);
-    refs.other.textContent = breakdownLabel(bd.other, shares.o);
+    setText(refs.tools, breakdownLabel(bd.tool_call, shares.t));
+    setText(refs.web, breakdownLabel(bd.web_search, shares.w));
+    setText(refs.other, breakdownLabel(bd.other, shares.o));
 
     const sp = clampPct(s.session?.percent);
-    refs.sessionPct.textContent = fmtPct(sp);
-    refs.sessionFill.style.width = sp == null ? "0%" : `${sp}%`;
-    refs.sessionReset.textContent = fmtReset(s.session);
+    setText(refs.sessionPct, fmtPct(sp));
+    setWidth(refs.sessionFill, sp);
+    setText(refs.sessionReset, fmtReset(s.session));
 
     const wp = clampPct(s.weekly?.percent);
-    refs.weeklyPct.textContent = fmtPct(wp);
-    refs.weeklyFill.style.width = wp == null ? "0%" : `${wp}%`;
-    refs.weeklyReset.textContent = fmtReset(s.weekly);
+    setText(refs.weeklyPct, fmtPct(wp));
+    setWidth(refs.weeklyFill, wp);
+    setText(refs.weeklyReset, fmtReset(s.weekly));
 
     const cacheTxt = fmtCache(s.cache);
     if (refs.cacheRow) {
       const show = showCache && !!cacheTxt;
-      refs.cacheRow.hidden = !show;
-      if (show) refs.cacheTtl.textContent = cacheTxt;
+      if (refs.cacheRow.hidden !== !show) refs.cacheRow.hidden = !show;
+      if (show) setText(refs.cacheTtl, cacheTxt);
     }
 
     const st = s.status || "waiting";
-    refs.status.dataset.s = st;
-    if (st === "error") refs.status.textContent = "error";
-    else if (st === "waiting") refs.status.textContent = "waiting";
-    else refs.status.textContent = "live";
+    if (refs.status.dataset.s !== st) refs.status.dataset.s = st;
+    if (st === "error") setText(refs.status, "error");
+    else if (st === "waiting") setText(refs.status, "waiting");
+    else setText(refs.status, "live");
 
     const ctxAria = ctxPct == null ? "Context unknown" : `Context ${Math.round(ctxPct)} percent`;
-    refs.panel.setAttribute("aria-label", `Claude usage meter. ${ctxAria}.`);
+    const aria = `Claude usage meter. ${ctxAria}.`;
+    if (refs.panel.getAttribute("aria-label") !== aria) refs.panel.setAttribute("aria-label", aria);
   }
 
   function readPrefs(cb) {
@@ -374,19 +354,30 @@
     chrome.storage.local.get(defaults, (p) => cb({ ...defaults, ...p }));
   }
 
+  let api = null;
+  let prefs = { enabled: true, showCache: false };
+
+  function applyVisibility(host) {
+    const v = prefs.enabled === false ? "none" : "";
+    if (host.style.display !== v) host.style.display = v;
+  }
+
   function mount() {
     const host = ensureHost();
-    if (host.shadowRoot && host.__shiphookMeter) {
-      positionHost(host);
-      return host.__shiphookMeter;
-    }
+    if (api && api.host === host && host.shadowRoot) return api;
 
     const shadow = host.shadowRoot || host.attachShadow({ mode: "open" });
+    shadow.replaceChildren();
 
     if (STYLE_URL) {
+      // Hide until the sheet loads so the unstyled panel never flashes.
+      host.style.visibility = "hidden";
       const link = document.createElement("link");
       link.rel = "stylesheet";
       link.href = STYLE_URL;
+      const show = () => host.style.removeProperty("visibility");
+      link.addEventListener("load", show, { once: true });
+      link.addEventListener("error", show, { once: true });
       shadow.appendChild(link);
     } else if (globalThis.__SHIPHOOK_METER_CSS__) {
       const style = document.createElement("style");
@@ -395,22 +386,16 @@
     } else {
       const style = document.createElement("style");
       style.textContent =
-        `.panel{position:relative;width:248px;background:#0f0f0f;color:#f2f2f2;border:1px solid #3a3a3a;border-radius:10px;padding:10px 12px;font:12px/1.35 system-ui,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.5)}.bar{height:6px;background:#1f1f1f;border-radius:99px;overflow:hidden}.bar>i{display:block;height:100%;background:#a894ff}.pct{font-size:22px;font-weight:650;margin:6px 0 8px;color:#fff}.meta,.label,.status{color:#a3a3a3;font-size:10px}.empty{margin-top:8px;font-size:11px;color:#f0b429}.panel[data-collapsed=true] .body{display:none}.chip{display:none}.panel[data-collapsed=true] .chip{display:flex;font-weight:600}`;
+        `.panel{position:fixed;right:14px;bottom:14px;width:248px;background:#0f0f0f;color:#f2f2f2;border:1px solid #3a3a3a;border-radius:10px;padding:10px 12px;font:12px/1.35 system-ui,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.5)}.bar{height:6px;background:#1f1f1f;border-radius:99px;overflow:hidden}.bar>i{display:block;height:100%;background:#a894ff}.pct{font-size:22px;font-weight:650;margin:6px 0 8px;color:#fff}.meta,.label,.status{color:#a3a3a3;font-size:10px}.empty{margin-top:8px;font-size:11px;color:#f0b429}.panel[data-collapsed=true] .body{display:none}.chip{display:none}.panel[data-collapsed=true] .chip{display:flex;font-weight:600}`;
       shadow.appendChild(style);
     }
 
     const { refs, setCollapsed } = createUi(shadow);
-    let state = { status: "waiting", updatedAt: Date.now() };
-    let prefs = { enabled: true, showCache: false };
-
-    function applyVisibility() {
-      host.style.display = prefs.enabled === false ? "none" : "";
-    }
+    let state = (api && api.getState()) || { status: "waiting", updatedAt: Date.now() };
 
     function paint() {
       render(refs, state, prefs);
-      applyVisibility();
-      positionHost(host);
+      applyVisibility(host);
     }
 
     function setState(next) {
@@ -422,29 +407,12 @@
       if (ev?.detail) setState(ev.detail);
     });
 
-    readPrefs((p) => {
-      prefs = p;
-      paint();
-    });
-
-    if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
-      chrome.storage.onChanged.addListener((changes, area) => {
-        if (area !== "local") return;
-        if (changes.enabled) prefs.enabled = changes.enabled.newValue;
-        if (changes.showCache) prefs.showCache = changes.showCache.newValue;
-        paint();
-      });
-    }
-
-    window.addEventListener("resize", () => positionHost(host), { passive: true });
-    window.addEventListener("scroll", () => positionHost(host), { passive: true, capture: true });
-
-    const api = {
+    api = {
       setState,
       getState: () => state,
       setCollapsed,
       host,
-      reposition: () => positionHost(host),
+      paint,
     };
     host.__shiphookMeter = api;
     window.__SHIPHOOK_METER__ = api;
@@ -452,27 +420,36 @@
     return api;
   }
 
+  readPrefs((p) => {
+    prefs = p;
+    api?.paint();
+  });
+
+  if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !(changes.enabled || changes.showCache)) return;
+      if (changes.enabled) prefs.enabled = changes.enabled.newValue;
+      if (changes.showCache) prefs.showCache = changes.showCache.newValue;
+      api?.paint();
+    });
+  }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => mount());
+    document.addEventListener("DOMContentLoaded", () => mount(), { once: true });
   } else {
     mount();
   }
 
-  const mo = new MutationObserver(() => {
-    if (!document.getElementById(HOST_ID)) mount();
-    else if (window.__SHIPHOOK_METER__?.reposition) window.__SHIPHOOK_METER__.reposition();
-  });
-  mo.observe(document.documentElement, { childList: true, subtree: true });
+  // The host is a direct child of <html>, so watching <html>'s own children is
+  // enough to notice removal. No subtree observer: Claude mutates the DOM on
+  // every streamed token.
+  new MutationObserver(() => {
+    if (api && !api.host.isConnected) mount();
+  }).observe(document.documentElement, { childList: true });
 
-  // rAF keep-alive: remount if shadow root is missing
-  function keepAlive() {
-    const host = document.getElementById(HOST_ID);
-    if (host && !host.shadowRoot) {
-      mount();
-    }
-    requestAnimationFrame(keepAlive);
-  }
-  requestAnimationFrame(keepAlive);
+  setInterval(() => {
+    if (api && !document.hidden && prefs.enabled !== false) api.paint();
+  }, TICK_MS);
 
   globalThis.__SHIPHOOK_METER_MOUNT__ = mount;
 })();

@@ -13,9 +13,9 @@ The overlay UI consists of two main files:
 
 ### Shadow DOM Host
 
-- **Mount point:** `#shiphook-claude-meter` (appended to `document.body`)
-- **Shadow root:** Attached in `closed` mode to prevent external JS interference
-- **Positioning:** Anchored near the composer when found (see selectors below), otherwise bottom-right fixed
+- **Mount point:** `#shiphook-claude-meter` (appended to `document.documentElement`)
+- **Shadow root:** Attached in `open` mode
+- **Positioning:** Fixed bottom-right (see Positioning below)
 - **State updates:** Via `CustomEvent "shiphook-meter:update"` or direct `window.__SHIPHOOK_METER__.setState(state)`
 
 ---
@@ -54,23 +54,11 @@ When no usage data is available:
 
 ---
 
-## Composer Anchoring
+## Positioning
 
-The overlay attempts to anchor itself near Claude's composer using these selectors (checked in order):
+`.panel` is `position: fixed` at `right: 14px; bottom: 14px` (see `overlay.css`). The host is also fixed but has no transform, so it doesn't create a containing block and the panel is always pinned to the viewport corner. Earlier versions measured the composer on every DOM mutation to move the host; that never moved the panel and was removed in 0.1.15.
 
-```javascript
-const COMPOSER_SELECTORS = [
-  '[data-testid="chat-input"]',
-  '[data-cds="ChatComposer"]',
-  '.rounded-composer',
-  'fieldset.rounded-composer',
-  '[class*="ChatComposer"]',
-  'form[class*=\'composer\']',
-  'main form textarea',
-];
-```
-
-If a composer is found and visible (non-zero height), the overlay positions itself relative to it. Otherwise, it defaults to `fixed` positioning at bottom-right.
+If the host element is removed from `<html>`, a childList observer on `<html>` (no subtree) re-appends the same element, so the shadow root and state survive.
 
 ---
 
